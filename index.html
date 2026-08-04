@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f6feb">
+<meta name="description" content="講義の録音から文字起こし・要約・要点を自動生成するスマホ対応Webアプリ（Gemini API）">
+<title>講義音声ノートAI</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="appbar">
+  <h1>講義音声ノートAI</h1>
+  <p class="sub">録音を入れると 文字起こし → 要約 → 要点 を自動で作ります</p>
+</header>
+
+<main>
+
+  <!-- ===== APIキー ===== -->
+  <section class="card" id="keyCard">
+    <div class="card-head">
+      <h2>1. APIキー</h2>
+      <span class="badge" id="keyBadge">未設定</span>
+    </div>
+
+    <label for="apiKey">Gemini APIキー</label>
+    <div class="row">
+      <input type="password" id="apiKey" autocomplete="off" autocapitalize="off"
+             spellcheck="false" placeholder="AIza... から始まるキー">
+      <button type="button" class="btn ghost slim" id="toggleKey" aria-label="キーの表示切替">表示</button>
+    </div>
+
+    <div class="row wrap">
+      <button type="button" class="btn" id="saveKey">この端末に保存</button>
+      <button type="button" class="btn ghost" id="clearKey">削除</button>
+      <button type="button" class="btn ghost" id="testKey">接続テスト</button>
+    </div>
+
+    <p class="note">
+      キーは<strong>この端末のブラウザ内（localStorage）にだけ</strong>保存され、どこにも送信されません。
+      キーは <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> で取得できます。
+      共用端末では使い終わったら「削除」を押してください。
+    </p>
+    <div class="inline-msg" id="keyMsg" hidden></div>
+  </section>
+
+  <!-- ===== 入力 ===== -->
+  <section class="card">
+    <div class="card-head"><h2>2. 音声を入れる</h2></div>
+
+    <label for="lectureName">講義名（任意・入れると要約が賢くなります）</label>
+    <input type="text" id="lectureName" placeholder="例：情報理論 第5回 エントロピー">
+
+    <label for="audioFile">音声ファイル</label>
+    <input type="file" id="audioFile" accept="audio/*,.mp3,.wav,.aac,.ogg,.flac,.aiff,.aif">
+    <p class="note" id="fileInfo">
+      対応形式：wav / mp3 / aac / ogg / flac / aiff　｜　まずは 30秒〜2分 の短い音声で試してください（上限15MB）
+    </p>
+
+    <details class="adv">
+      <summary>詳細設定</summary>
+      <label for="model">モデル</label>
+      <select id="model">
+        <option value="gemini-3.5-flash" selected>gemini-3.5-flash（推奨・公式音声ガイド準拠）</option>
+        <option value="gemini-3.6-flash">gemini-3.6-flash（最新）</option>
+        <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite（速い・安い）</option>
+        <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
+      </select>
+      <p class="note">
+        モデル名は<a href="https://ai.google.dev/gemini-api/docs/models" target="_blank" rel="noopener">公式Models一覧</a>から選んでいます。
+        <code>gemini-1.5-*</code> などの古い名前は使いません。
+      </p>
+    </details>
+
+    <button type="button" class="btn primary big" id="runBtn">文字起こし＆要約を実行</button>
+    <button type="button" class="btn ghost" id="cancelBtn" hidden>キャンセル</button>
+  </section>
+
+  <!-- ===== 進捗 ===== -->
+  <section class="card" id="progressCard" hidden>
+    <div class="card-head"><h2>処理中</h2></div>
+    <ol class="steps">
+      <li id="step1"><span class="dot"></span>文字起こし</li>
+      <li id="step2"><span class="dot"></span>要約・要点</li>
+    </ol>
+    <div class="bar"><div class="bar-in" id="bar"></div></div>
+    <p class="note" id="progressNote">音声を送信しています…</p>
+  </section>
+
+  <!-- ===== エラー ===== -->
+  <section class="card err" id="errorCard" hidden>
+    <div class="card-head"><h2>エラー</h2></div>
+    <p id="errorMsg"></p>
+    <details id="errorDetailWrap" hidden>
+      <summary>詳細（AIに相談するときはこれを丸ごと貼ってください）</summary>
+      <pre id="errorDetail"></pre>
+      <button type="button" class="btn ghost slim" data-copy="errorDetail">詳細をコピー</button>
+    </details>
+  </section>
+
+  <!-- ===== 結果 ===== -->
+  <section class="card" id="summaryCard" hidden>
+    <div class="card-head">
+      <h2>3. 要約</h2>
+      <button type="button" class="btn ghost slim" id="copySummary">コピー</button>
+    </div>
+    <h3 class="mini">要約</h3>
+    <p id="summaryText" class="out"></p>
+    <h3 class="mini">要点</h3>
+    <ul id="pointsList" class="points"></ul>
+  </section>
+
+  <section class="card" id="transcriptCard" hidden>
+    <div class="card-head">
+      <h2>4. 文字起こし（全文）</h2>
+      <button type="button" class="btn ghost slim" data-copy="transcriptText">コピー</button>
+    </div>
+    <p class="note" id="transcriptMeta"></p>
+    <pre id="transcriptText" class="out pre"></pre>
+  </section>
+
+  <p class="footer-note">
+    ⚠️ 個人情報・機密を含む音声はアップロードしないでください。<br>
+    このアプリはブラウザから直接 Gemini API を呼びます（キーはブラウザ内に保存）。自分専用の利用を想定しています。
+  </p>
+</main>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="main.js"></script>
+</body>
+</html>
